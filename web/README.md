@@ -1,0 +1,1 @@
+This web directory contains a sveltekit projet with most of the aphasiaGPT application. (handling auth, db access, openaAI api call, etc)
