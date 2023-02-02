@@ -2,6 +2,6 @@
   import "@/app.css";
 </script>
 
-<main class="font-sans">
+<main class="font-sans text-stone-800">
   <slot />
 </main>
