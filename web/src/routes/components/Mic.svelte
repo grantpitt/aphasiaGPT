@@ -48,6 +48,11 @@
       const data = JSON.parse(event.data);
       handleTranscriptAvailable(data);
     };
+    socket.onclose = () => {
+      if (record) {
+        onFail();
+      }
+    };
   }
 
   async function initializeRecorder() {
