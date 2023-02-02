@@ -20,7 +20,6 @@
   }
 
   function onNew() {
-    recording = false;
     transcript = "";
     potential = "";
   }
