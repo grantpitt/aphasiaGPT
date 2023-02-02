@@ -3,6 +3,3 @@ This web directory contains a sveltekit projet with most of the aphasiaGPT appli
 resources:
 1. https://github.com/grantpitt/brocas
 2. https://www.npmjs.com/package/@google-cloud/speech
-3. https://blog.cloudflare.com/introducing-websockets-in-workers/
-4. https://github.com/cloudflare/websocket-template
-

@@ -19,6 +19,12 @@
     recording = false;
   }
 
+  function onNew() {
+    recording = false;
+    transcript = "";
+    potential = "";
+  }
+
   function handleTranscriptChange(newTranscript: string, newPotential: string) {
     transcript += newTranscript;
     potential = newPotential;
@@ -34,7 +40,7 @@
   </header>
   
   <section class="mb-4">
-    <Controls {onBack} {onPlayPause} {recording} />
+    <Controls {onBack} {onPlayPause} {recording} {onNew} />
     <Mic record={recording} onChange={handleTranscriptChange} {onFail} />
   
     <h2 class="text-2xl font-semibold my-2">Transcript</h2>
