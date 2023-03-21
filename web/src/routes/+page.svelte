@@ -87,7 +87,15 @@
 
     <h2 class="text-2xl font-semibold my-2">Transcript</h2>
     <p class="text-xl text-stone-400">
-      {transcript || "Click play and begin speaking..."}
+      {#if transcript === ""}
+        {#if recording}
+          Begin speaking...
+        {:else}
+          Click play and begin speaking...
+        {/if}
+      {:else}
+        {transcript}
+      {/if}
     </p>
   </section>
 </section>
