@@ -41,6 +41,7 @@
     const words = transcript.split(" ");
     const minCleanWordCount = 2;
     const maxCleanWordCount = 10;
+    console.log(`transcript "${transcript}" words ${words.length}`);
     if (words.length < minCleanWordCount) {
       return;
     }
@@ -69,7 +70,7 @@
 
   <section class="mb-4">
     <Controls {onBack} {onPlayPause} {recording} {onNew} />
-    <Mic record={recording} onChange={handleTranscriptChange} {onFail} />
+    <Mic {recording} onChange={handleTranscriptChange} {onFail} />
 
     <h2 class="text-2xl font-semibold my-2">Prediction</h2>
     <div class="min-h-[3rem]">

@@ -1,97 +1,130 @@
 <script lang="ts">
+  import { RecordRTCPromisesHandler, StereoAudioRecorder } from "recordrtc";
   import { onDestroy } from "svelte";
-  import { RecordRTCPromisesHandler } from "recordrtc";
 
-  export let record: boolean;
-  export let onFail: (message: string) => void;
+  export let recording: boolean;
   export let onChange: (transcript: string) => void;
+  export let onFail: (message: string) => void;
 
-  let socket: WebSocket | null = null;
   let stream: MediaStream | null = null;
   let recorder: RecordRTCPromisesHandler | null = null;
-  let initializingPromise: Promise<void> | null = null;
+  let socket: WebSocket | null = null;
 
-  $: record ? onRecord() : onStop();
-  onDestroy(onStop);
+  let tokenPromise = getToken();
 
-  function onRecord() {
-    console.log("Opening connection");
-    initializeSocket();
-  }
+  $: recording ? startRecording() : stopRecording();
+  onDestroy(stopRecording);
 
-  async function onStop() {
-    console.log("stopping");
+  let transcriptsByAudioStart = new Map<number, string>();
+
+  // TODO: decide if we want to close everything or just pause the recorder
+  // if assembly ai doesn't care to leave the connection open then just leave it ig.
+  async function stopRecording() {
+    // get a new token for the next recording
+    tokenPromise = getToken();
 
     // close the socket
-    console.log("closing socket", socket);
-    socket?.close();
-    socket = null;
-
-    if (initializingPromise) {
-      console.log("waiting for initialization to finish");
-      await initializingPromise;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ terminate_session: true }));
+      socket.close();
+      socket = null;
     }
 
-    // stop the stream
-    console.log("stopping stream", stream);
-    stream?.getTracks().forEach((track) => track.stop());
-    stream = null;
+    // close the recorder
+    if (recorder) {
+      await recorder.pauseRecording();
+      await recorder.destroy();
+      recorder = null;
+    }
 
-    // stop the recorder
-    console.log("stopping recorder", recorder);
-    await recorder?.stopRecording();
-    await recorder?.destroy();
-    recorder = null;
+    // close the stream
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      stream = null;
+    }
+
+    if (recording) {
+      onFail("recording stopped unexpectedly");
+    }
   }
 
-  function initializeSocket() {
-    socket = new WebSocket("ws://localhost:8000/");
-    socket.onerror = (error) => {
-      console.error(error);
-      onFail("Could not connect to the transcription server :(");
-    };
-    socket.onopen = () => {
-      console.log("socket opened");
-      initializingPromise = initializeRecorder();
-    };
-    socket.onmessage = (event) => {
-      console.log("message received", event.data);
-      onChange(event.data);
-    };
-    socket.onclose = () => {
-      if (record) {
-        onFail("The transcription server failed :(");
-      }
-    };
+  async function getToken() {
+    // get temporary api key
+    const response = await fetch("/api/assemblyai-token");
+    const { token } = await response.json();
+    return token;
+  }
+
+  async function startRecording() {
+    const token = await tokenPromise;
+
+    console.log("starting recording", token);
+
+    // open the socket
+    socket = new WebSocket(
+      `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${token}`
+    );
+
+    // socket event
+    socket.onopen = onSocketOpen;
+    socket.onmessage = onSocketMessage;
+    socket.onclose = onSocketClose;
+    socket.onerror = onSocketError;
+  }
+
+  function onSocketError(event: Event) {
+    console.error("socket error", event);
+    stopRecording();
+  }
+
+  function onSocketClose(event: CloseEvent) {
+    console.log("socket closed", event);
+    stopRecording();
+  }
+
+  function onSocketMessage(event: MessageEvent) {
+    const data = JSON.parse(event.data);
+    console.log("socket message::", data);
+    transcriptsByAudioStart.set(data.audio_start, data.text);
+    transcriptsByAudioStart = transcriptsByAudioStart;
+    const transcript = [...transcriptsByAudioStart.values()].join(" ").trim();
+    onChange(transcript);
+  }
+
+  function onSocketOpen(event: Event) {
+    console.log("socket opened", event);
+    initializeRecorder();
   }
 
   async function initializeRecorder() {
-    console.log("initializing recorder");
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
-      recorder = new RecordRTCPromisesHandler(stream, {
-        type: "audio",
-        mimeType: "audio/webm",
-        // TODO: should this be configurable?
-        timeSlice: 100,
-        ondataavailable: onDataAvailable,
-      });
-      await recorder.startRecording();
-      console.log("DONE initializing recorder");
-    } catch (error) {
-      console.error(error);
-      onFail("Either you don't have a microphone or you denied access to it.");
-    }
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorder = new RecordRTCPromisesHandler(stream, {
+      type: "audio",
+      mimeType: "audio/webm;codecs=pcm",
+      recorderType: StereoAudioRecorder,
+      timeSlice: 250,
+      desiredSampRate: 16000,
+      numberOfAudioChannels: 1,
+      bufferSize: 4096,
+      audioBitsPerSecond: 128000,
+      ondataavailable: onRecorderDataAvailable,
+    });
+
+    recorder.startRecording();
   }
 
-  function onDataAvailable(audioChunk: Blob) {
-    console.log("data available", audioChunk);
-    if (audioChunk.size > 0 && socket?.readyState === WebSocket.OPEN) {
-      console.log("sending data");
-      socket.send(audioChunk);
-    }
+  function onRecorderDataAvailable(blob: Blob) {
+    console.log("recorder data available", blob);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64data = reader.result as string;
+
+      // audio data must be sent as a base64 encoded string
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ audio_data: base64data.split("base64,")[1] }));
+      }
+    };
+    reader.readAsDataURL(blob);
   }
 </script>
