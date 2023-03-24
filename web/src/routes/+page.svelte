@@ -4,8 +4,19 @@
   import { throttle } from "lodash";
 
   let recording = false;
-  let transcript = "";
+  let audioStartsToIgnore = new Set<number>();
+  let transcriptsByAudioStart = new Map<number, string>();
   let gtp_transcripts: string[] | null = null;
+
+  $: transcript = completeTranscript(transcriptsByAudioStart);
+
+  function completeTranscript(transcripts: Map<number, string>) {
+    console.log("completeTranscript::", transcripts);
+    return [...transcripts.values()]
+      .filter((value) => value)
+      .join(" ")
+      .trim();
+  }
 
   function onBack() {
     console.log("back");
@@ -14,6 +25,9 @@
   function onPlayPause() {
     console.log("play/pause");
     recording = !recording;
+    audioStartsToIgnore.clear();
+    audioStartsToIgnore = audioStartsToIgnore
+
 
     if (!recording) {
       throttledProcessTranscript.cancel();
@@ -27,13 +41,22 @@
   }
 
   function onNew() {
-    transcript = "";
+    // add the current transcript to the ignore list
+    for (const [when, _] of transcriptsByAudioStart) {
+      audioStartsToIgnore.add(when);
+    }
+    transcriptsByAudioStart.clear();
+    transcriptsByAudioStart = transcriptsByAudioStart;
     gtp_transcripts = null;
     throttledProcessTranscript.cancel();
   }
 
-  function handleTranscriptChange(newTranscript: string) {
-    transcript += newTranscript;
+  function handleTranscriptChange(when: number, text: string) {
+    if (audioStartsToIgnore.has(when)) {
+      return;
+    }
+    transcriptsByAudioStart.set(when, text);
+    transcriptsByAudioStart = transcriptsByAudioStart;
     throttledProcessTranscript();
   }
 

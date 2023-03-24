@@ -3,7 +3,7 @@
   import { onDestroy } from "svelte";
 
   export let recording: boolean;
-  export let onChange: (transcript: string) => void;
+  export let onChange: (when: number, text: string) => void;
   export let onFail: (message: string) => void;
 
   let stream: MediaStream | null = null;
@@ -14,8 +14,6 @@
 
   $: recording ? startRecording() : stopRecording();
   onDestroy(stopRecording);
-
-  let transcriptsByAudioStart = new Map<number, string>();
 
   // TODO: decide if we want to close everything or just pause the recorder
   // if assembly ai doesn't care to leave the connection open then just leave it ig.
@@ -85,10 +83,7 @@
   function onSocketMessage(event: MessageEvent) {
     const data = JSON.parse(event.data);
     console.log("socket message::", data);
-    transcriptsByAudioStart.set(data.audio_start, data.text);
-    transcriptsByAudioStart = transcriptsByAudioStart;
-    const transcript = [...transcriptsByAudioStart.values()].join(" ").trim();
-    onChange(transcript);
+    onChange(data.audio_start, data.text);
   }
 
   function onSocketOpen(event: Event) {
